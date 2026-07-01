@@ -1,0 +1,6 @@
+{
+  "name": "Family Expense Tracker with AI Receipt Scanner",
+  "description": "ระบบจัดการรายรับรายจ่ายส่วนตัวและครอบครัว รองรับการทำงานร่วมกัน มีการตั้งงบประมาณ แจ้งเตือน และสแกนใบเสร็จด้วย AI (Gemini)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

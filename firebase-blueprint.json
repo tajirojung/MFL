@@ -1,0 +1,190 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account and profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "familyId": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "Savings account or credit card details.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["savings", "credit_card"] },
+        "balance": { "type": "number" },
+        "limit": { "type": "number" },
+        "interestRate": { "type": "number" },
+        "statementDate": { "type": "number" }
+      },
+      "required": ["userId", "name", "type", "balance"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Income or expense transaction record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "familyId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "accountId": { "type": "string" }
+      },
+      "required": ["userId", "userName", "amount", "type", "category", "date", "accountId"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "Category budget for a specific month.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "month": { "type": "string" }
+      },
+      "required": ["familyId", "category", "amount", "month"]
+    },
+    "RecurringExpense": {
+      "title": "RecurringExpense",
+      "description": "Recurring monthly bills or installments.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "familyId": { "type": "string" },
+        "amount": { "type": "number" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "accountId": { "type": "string" },
+        "nextDueDate": { "type": "string" }
+      },
+      "required": ["userId", "familyId", "amount", "name", "category", "paymentMethod", "accountId", "nextDueDate"]
+    },
+    "RecurringIncome": {
+      "title": "RecurringIncome",
+      "description": "Recurring monthly income configuration.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "familyId": { "type": "string" },
+        "name": { "type": "string" },
+        "baseSalary": { "type": "number" },
+        "ot": { "type": "number" },
+        "commission": { "type": "number" },
+        "incentive": { "type": "number" },
+        "otherIncome": { "type": "number" },
+        "freelanceIncome": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "dayOfMonth": { "type": "number" },
+        "accountId": { "type": "string" },
+        "lastTriggeredMonth": { "type": "string" }
+      },
+      "required": ["userId", "name", "baseSalary", "totalAmount", "dayOfMonth", "accountId"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "System or budget warnings for the user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "isRead": { "type": "boolean" }
+      },
+      "required": ["userId", "message", "type", "isRead"]
+    },
+    "FamilyGroup": {
+      "title": "FamilyGroup",
+      "description": "Shared family group for joint wallets.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "members": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["name", "createdBy", "members"]
+    },
+    "FamilyInvitation": {
+      "title": "FamilyInvitation",
+      "description": "Pending family join invitations.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string" },
+        "familyName": { "type": "string" },
+        "email": { "type": "string" },
+        "senderName": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["familyId", "familyName", "email", "senderName", "status"]
+    },
+    "CustomCategory": {
+      "title": "CustomCategory",
+      "description": "Custom transaction and budget category.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "familyId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["userId", "name", "type"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "User profiles collection"
+    },
+    "accounts": {
+      "schema": "Account",
+      "description": "Bank accounts or credit cards collection"
+    },
+    "transactions": {
+      "schema": "Transaction",
+      "description": "Transactions history collection"
+    },
+    "budgets": {
+      "schema": "Budget",
+      "description": "Monthly category budget collection"
+    },
+    "recurring": {
+      "schema": "RecurringExpense",
+      "description": "Recurring payments collection"
+    },
+    "recurring_incomes": {
+      "schema": "RecurringIncome",
+      "description": "Recurring monthly incomes collection"
+    },
+    "custom_categories": {
+      "schema": "CustomCategory",
+      "description": "Custom categories collection"
+    },
+    "notifications": {
+      "schema": "AppNotification",
+      "description": "Alerts and notifications collection"
+    },
+    "families": {
+      "schema": "FamilyGroup",
+      "description": "Family groups collection"
+    },
+    "familyInvitations": {
+      "schema": "FamilyInvitation",
+      "description": "Family invitation requests collection"
+    }
+  }
+}

@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // True if user is logged in
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    // Rules for 'users' collection
+    match /users/{userId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Rules for 'accounts' collection
+    match /accounts/{accountId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Rules for 'transactions' collection
+    match /transactions/{transactionId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Rules for 'budgets' collection
+    match /budgets/{budgetId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Rules for 'recurring' collection
+    match /recurring/{recurringId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Rules for 'recurring_incomes' collection
+    match /recurring_incomes/{recurringIncomeId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Rules for 'custom_categories' collection
+    match /custom_categories/{customCategoryId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Rules for 'notifications' collection
+    match /notifications/{notificationId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Rules for 'families' collection
+    match /families/{familyId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Rules for 'familyInvitations' collection
+    match /familyInvitations/{invitationId} {
+      allow read, write: if isLoggedIn();
+    }
+  }
+}
