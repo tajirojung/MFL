@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MoneyForLife</title>
+    <meta
+      name="description"
+      content="MoneyForLife demo app for personal finance, budget tracking, goals, and spending insights."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <div class="brand">
+          <div class="brand-mark">M</div>
+          <div>
+            <strong>MoneyForLife</strong>
+            <span>Personal finance OS</span>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button class="nav-item" data-view="transactions">Transactions</button>
+          <button class="nav-item" data-view="budgets">Budgets</button>
+          <button class="nav-item" data-view="goals">Goals</button>
+          <button class="nav-item" data-view="insights">Insights</button>
+        </nav>
+
+        <div class="demo-card">
+          <span>Demo Mode</span>
+          <strong>พร้อมลองทุกฟังก์ชัน</strong>
+          <p>ข้อมูลเก็บในเครื่องนี้ก่อน ต่อ Supabase แล้วจะเปลี่ยนเป็น cloud sync ได้</p>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">July 2026</p>
+            <h1 id="viewTitle">Dashboard</h1>
+          </div>
+          <div class="top-actions">
+            <button class="ghost" id="seedButton">Reset demo</button>
+            <button class="google-button" id="loginButton">
+              <span>G</span>
+              Sign in with Google
+            </button>
+          </div>
+        </header>
+
+        <section class="view active" id="dashboard">
+          <div class="hero-panel">
+            <div>
+              <p class="eyebrow">Financial health</p>
+              <h2>เห็นเงินทั้งเดือนในจอเดียว</h2>
+              <p>
+                MoneyForLife รวมรายรับ รายจ่าย งบประมาณ และเป้าหมายไว้ใน dashboard เดียว
+                พร้อม insight ที่ช่วยบอกว่าเงินรั่วตรงไหน
+              </p>
+            </div>
+            <div class="score-card">
+              <span>Life Score</span>
+              <strong id="lifeScore">86</strong>
+              <small>ดีขึ้นจากเดือนก่อน 12%</small>
+            </div>
+          </div>
+
+          <div class="metric-grid">
+            <article class="metric">
+              <span>Income</span>
+              <strong id="incomeMetric">฿0</strong>
+              <small>เงินเข้าเดือนนี้</small>
+            </article>
+            <article class="metric">
+              <span>Expense</span>
+              <strong id="expenseMetric">฿0</strong>
+              <small>เงินออกเดือนนี้</small>
+            </article>
+            <article class="metric">
+              <span>Balance</span>
+              <strong id="balanceMetric">฿0</strong>
+              <small>เหลือใช้จริง</small>
+            </article>
+            <article class="metric">
+              <span>Savings Rate</span>
+              <strong id="savingMetric">0%</strong>
+              <small>อัตราเก็บเงิน</small>
+            </article>
+          </div>
+
+          <div class="content-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Cash Flow</h3>
+                  <p>ภาพรวมรายรับรายจ่ายรายวัน</p>
+                </div>
+              </div>
+              <div class="chart" id="cashflowChart" aria-label="Cash flow chart"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Top Categories</h3>
+                  <p>หมวดที่ใช้เงินสูงสุด</p>
+                </div>
+              </div>
+              <div class="category-list" id="categoryList"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="transactions">
+          <div class="split">
+            <form class="panel form-panel" id="transactionForm">
+              <div class="panel-head">
+                <div>
+                  <h3>Add Transaction</h3>
+                  <p>เพิ่มรายการใหม่ได้ทันที</p>
+                </div>
+              </div>
+              <div class="field-row">
+                <label>
+                  Type
+                  <select id="typeInput">
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
+                </label>
+                <label>
+                  Amount
+                  <input id="amountInput" type="number" min="1" step="1" placeholder="1200" required />
+                </label>
+              </div>
+              <label>
+                Title
+                <input id="titleInput" type="text" placeholder="ค่าอาหาร / เงินเดือน / ค่าน้ำมัน" required />
+              </label>
+              <div class="field-row">
+                <label>
+                  Category
+                  <select id="categoryInput">
+                    <option>Food</option>
+                    <option>Home</option>
+                    <option>Transport</option>
+                    <option>Pet</option>
+                    <option>Health</option>
+                    <option>Income</option>
+                    <option>Debt</option>
+                    <option>Shopping</option>
+                  </select>
+                </label>
+                <label>
+                  Date
+                  <input id="dateInput" type="date" required />
+                </label>
+              </div>
+              <button class="primary" type="submit">Add transaction</button>
+            </form>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Recent Transactions</h3>
+                  <p>คลิก delete เพื่อลบรายการ demo</p>
+                </div>
+              </div>
+              <div class="transaction-list" id="transactionList"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="budgets">
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h3>Monthly Budgets</h3>
+                <p>ดูงบแต่ละหมวดว่าใกล้เต็มหรือยัง</p>
+              </div>
+            </div>
+            <div class="budget-grid" id="budgetGrid"></div>
+          </div>
+        </section>
+
+        <section class="view" id="goals">
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h3>Life Goals</h3>
+                <p>เป้าหมายการเงินที่วัดความคืบหน้าได้</p>
+              </div>
+            </div>
+            <div class="goal-grid" id="goalGrid"></div>
+          </div>
+        </section>
+
+        <section class="view" id="insights">
+          <div class="insight-layout">
+            <article class="insight-hero">
+              <span>AI-style insight</span>
+              <h2 id="insightHeadline">เดือนนี้ควบคุมรายจ่ายได้ดี</h2>
+              <p id="insightText">
+                ระบบจะอ่าน pattern จาก transaction และ budget เพื่อสรุปสิ่งที่ควรระวัง
+              </p>
+            </article>
+            <div class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Smart Alerts</h3>
+                  <p>สิ่งที่ควรดูวันนี้</p>
+                </div>
+              </div>
+              <div class="alert-list" id="alertList"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
