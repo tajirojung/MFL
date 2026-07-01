@@ -1,34 +1,34 @@
-const storageKey = "moneyforlife.demo.v1";
+const storageKey = "moneyforlife.demo.th.v2";
 
 const seedData = {
   user: {
-    name: "Demo User",
+    name: "ผู้ใช้ทดลอง",
     email: "demo@moneyforlife.app",
   },
   budgets: [
-    { category: "Food", limit: 9000 },
-    { category: "Home", limit: 18000 },
-    { category: "Transport", limit: 6500 },
-    { category: "Pet", limit: 4500 },
-    { category: "Health", limit: 3000 },
-    { category: "Shopping", limit: 5000 },
+    { category: "อาหาร", limit: 9000 },
+    { category: "บ้าน", limit: 18000 },
+    { category: "เดินทาง", limit: 6500 },
+    { category: "สัตว์เลี้ยง", limit: 4500 },
+    { category: "สุขภาพ", limit: 3000 },
+    { category: "ช้อปปิ้ง", limit: 5000 },
   ],
   goals: [
-    { title: "Emergency Fund", target: 120000, saved: 47500, note: "เงินสำรอง 4 เดือน" },
-    { title: "Mortgage Cushion", target: 50000, saved: 17800, note: "กันยอดผ่อนบ้านเดือนหนัก" },
-    { title: "Pet Care Fund", target: 24000, saved: 9200, note: "วัคซีน อาหาร ค่ารักษา" },
+    { title: "เงินสำรองฉุกเฉิน", target: 120000, saved: 47500, note: "เงินสำรองประมาณ 4 เดือน" },
+    { title: "กันชนค่าผ่อนบ้าน", target: 50000, saved: 17800, note: "กันยอดผ่อนบ้านเดือนหนัก" },
+    { title: "กองทุนสัตว์เลี้ยง", target: 24000, saved: 9200, note: "วัคซีน อาหาร ค่ารักษา" },
   ],
   transactions: [
-    { id: "t1", type: "income", title: "Salary", category: "Income", amount: 33000, date: "2026-07-01" },
-    { id: "t2", type: "expense", title: "Mortgage", category: "Home", amount: 16700, date: "2026-07-02" },
-    { id: "t3", type: "expense", title: "Groceries", category: "Food", amount: 1850, date: "2026-07-03" },
-    { id: "t4", type: "expense", title: "EV charging", category: "Transport", amount: 1240, date: "2026-07-04" },
-    { id: "t5", type: "expense", title: "Dog food", category: "Pet", amount: 890, date: "2026-07-05" },
-    { id: "t6", type: "expense", title: "Clinic", category: "Health", amount: 650, date: "2026-07-08" },
-    { id: "t7", type: "expense", title: "Coffee", category: "Food", amount: 85, date: "2026-07-09" },
-    { id: "t8", type: "expense", title: "House supplies", category: "Home", amount: 1220, date: "2026-07-11" },
-    { id: "t9", type: "income", title: "Side project", category: "Income", amount: 4200, date: "2026-07-14" },
-    { id: "t10", type: "expense", title: "Futsal", category: "Health", amount: 300, date: "2026-07-15" },
+    { id: "t1", type: "income", title: "เงินเดือน", category: "รายรับ", amount: 33000, date: "2026-07-01" },
+    { id: "t2", type: "expense", title: "ค่าผ่อนบ้าน", category: "บ้าน", amount: 16700, date: "2026-07-02" },
+    { id: "t3", type: "expense", title: "ของกินเข้าบ้าน", category: "อาหาร", amount: 1850, date: "2026-07-03" },
+    { id: "t4", type: "expense", title: "ชาร์จรถ EV", category: "เดินทาง", amount: 1240, date: "2026-07-04" },
+    { id: "t5", type: "expense", title: "อาหารนับเงิน", category: "สัตว์เลี้ยง", amount: 890, date: "2026-07-05" },
+    { id: "t6", type: "expense", title: "คลินิก", category: "สุขภาพ", amount: 650, date: "2026-07-08" },
+    { id: "t7", type: "expense", title: "กาแฟ", category: "อาหาร", amount: 85, date: "2026-07-09" },
+    { id: "t8", type: "expense", title: "ของใช้ในบ้าน", category: "บ้าน", amount: 1220, date: "2026-07-11" },
+    { id: "t9", type: "income", title: "งานเสริม", category: "รายรับ", amount: 4200, date: "2026-07-14" },
+    { id: "t10", type: "expense", title: "ฟุตซอล", category: "สุขภาพ", amount: 300, date: "2026-07-15" },
   ],
 };
 
@@ -114,7 +114,7 @@ function renderChart() {
 
     const group = document.createElement("div");
     group.className = "bar-group";
-    group.title = `Day ${day}: income ${money(income)}, expense ${money(expense)}`;
+    group.title = `วันที่ ${day}: รายรับ ${money(income)}, รายจ่าย ${money(expense)}`;
 
     const incomeBar = document.createElement("span");
     incomeBar.className = "bar income";
@@ -171,8 +171,8 @@ function renderTransactions() {
             </div>
           </div>
           <div class="transaction-row" style="margin-top: 10px">
-            <small>${item.type}</small>
-            <button class="delete-button" data-delete="${item.id}">Delete</button>
+            <small>${item.type === "income" ? "รายรับ" : "รายจ่าย"}</small>
+            <button class="delete-button" data-delete="${item.id}">ลบ</button>
           </div>
         </article>
       `,
@@ -234,7 +234,7 @@ function renderInsights() {
   const headline = balance >= 0 ? "เดือนนี้ยังเหลือเงิน แต่ต้องคุมหมวดใหญ่" : "เดือนนี้ติดลบ ต้องลดรายจ่ายด่วน";
   const text = topCategory
     ? `หมวด ${topCategory[0]} ใช้สูงสุดที่ ${money(topCategory[1])} จากรายจ่ายรวม ${money(expense)} อัตราเก็บเงินตอนนี้ ${savingRate}%`
-    : "ยังไม่มีรายจ่ายพอให้วิเคราะห์ ลองเพิ่มรายการใหม่ในหน้า Transactions";
+    : "ยังไม่มีรายจ่ายพอให้วิเคราะห์ ลองเพิ่มรายการใหม่ในหน้า รายการเงิน";
 
   document.querySelector("#insightHeadline").textContent = headline;
   document.querySelector("#insightText").textContent = text;
@@ -305,7 +305,7 @@ document.querySelector("#seedButton").addEventListener("click", () => {
 });
 
 document.querySelector("#loginButton").addEventListener("click", () => {
-  toast("Demo: ต่อ Supabase Auth แล้วปุ่มนี้จะเปิด Google Login จริง");
+  toast("โหมดทดลอง: เมื่อต่อ Supabase Auth แล้ว ปุ่มนี้จะเข้าสู่ระบบ Google ได้จริง");
 });
 
 render();
