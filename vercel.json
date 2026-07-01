@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/__/auth/:path*",
-      "destination": "https://charismatic-cosmos-nxhgq.firebaseapp.com/__/auth/:path*"
+      "source": "/(.*)",
+      "destination": "/"
     }
   ]
 }

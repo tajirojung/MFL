@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { supabase } from '../supabase';
 import { Wallet, ShieldAlert, Sparkles, LogIn, User, Users } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -15,14 +14,16 @@ export default function AuthScreen({ onMockSignIn }: AuthScreenProps) {
     setLoading(true);
     setError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) throw error;
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/popup-blocked') {
-        setError('เบราว์เซอร์ของคุณบล็อกหน้าต่างป๊อปอัพของ Google กรุณาเปิดใช้งานหรือเปลี่ยนมาใช้ "เข้าสู่ระบบด้วยบัญชีทดลอง" ด้านล่าง');
-      } else {
-        setError(err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบด้วย Google Account');
-      }
+      setError(err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบด้วย Google Account');
     } finally {
       setLoading(false);
     }

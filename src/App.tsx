@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { auth } from './firebase';
+import { supabase } from './supabase';
 import {
   subscribeUserProfile,
   subscribeAccounts,
@@ -308,7 +307,7 @@ function BudgetCategoryItem({ category, budgets, selectedMonth, user, profile, r
 }
 
 export default function App() {
-  const [user, setUser] = useState<FirebaseUser | UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
 
   // Custom confirmation modal state & helper
   const [confirmState, setConfirmState] = useState<{
@@ -508,15 +507,16 @@ export default function App() {
 
   // Auth Listener
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (fireUser) => {
-      if (fireUser) {
-        setUser(fireUser);
+    const handleSupabaseUser = async (supabaseUser: any | null) => {
+      if (supabaseUser) {
+        const metadata = supabaseUser.user_metadata || {};
         const profileData: UserProfile = {
-          uid: fireUser.uid,
-          email: fireUser.email || '',
-          displayName: fireUser.displayName || 'ผู้ใช้ Google',
-          photoURL: fireUser.photoURL || undefined,
+          uid: supabaseUser.id,
+          email: supabaseUser.email || '',
+          displayName: metadata.full_name || metadata.name || supabaseUser.email || 'ผู้ใช้ Google',
+          photoURL: metadata.avatar_url || metadata.picture || undefined,
         };
+        setUser(profileData);
         await saveUserProfile(profileData);
       } else {
         // If not logged in and not in local mock mode, set user to null
@@ -528,8 +528,17 @@ export default function App() {
         }
       }
       setLoading(false);
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      handleSupabaseUser(data.session?.user || null);
     });
-    return () => unsubAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      handleSupabaseUser(session?.user || null);
+    });
+
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
   // Sync profile and data based on Active User (Mock or Real)
@@ -849,7 +858,7 @@ export default function App() {
       localStorage.removeItem('active_mock_uid');
       setUser(null);
     } else {
-      await signOut(auth);
+      await supabase.auth.signOut();
     }
     setActiveTab('dashboard');
   };
