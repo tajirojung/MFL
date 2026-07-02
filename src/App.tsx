@@ -37,7 +37,8 @@ import {
   updateTransaction,
   updateBudget,
   updateCustomCategory,
-  createTransferTransactions
+  createTransferTransactions,
+  deleteAccount
 } from './dbService';
 import { Account, Transaction, Budget, BudgetItem, RecurringExpense, RecurringIncome, AppNotification, FamilyGroup, FamilyInvitation, UserProfile, CATEGORIES, CustomCategory } from './types';
 import { formatCurrency, formatDate, getMonthLabel } from './utils';
@@ -1004,6 +1005,43 @@ export default function App() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleDeleteAccount = async (account: Account) => {
+    if (!user) return;
+
+    const linkedTransactions = transactions.filter((tx) => tx.accountId === account.id).length;
+    const linkedRecurringExpenses = recurring.filter((item) => item.accountId === account.id).length;
+    const linkedRecurringIncomes = recurringIncomes.filter((item) => item.accountId === account.id).length;
+    const totalLinked = linkedTransactions + linkedRecurringExpenses + linkedRecurringIncomes;
+
+    if (totalLinked > 0) {
+      alert(
+        `ยังลบ "${account.name}" ไม่ได้ เพราะมีข้อมูลที่ผูกอยู่: ธุรกรรม ${linkedTransactions} รายการ, รายจ่ายประจำ ${linkedRecurringExpenses} รายการ, รายรับประจำ ${linkedRecurringIncomes} รายการ\n\nกรุณาลบหรือย้ายรายการเหล่านี้ไปบัญชีอื่นก่อน เพื่อไม่ให้ยอดเงินและประวัติการเงินเสียหาย`,
+      );
+      return;
+    }
+
+    requestConfirm(
+      'ลบแหล่งเงิน',
+      `ต้องการลบ "${account.name}" ใช่หรือไม่? บัญชีนี้ไม่มีธุรกรรมหรือรายการประจำที่ผูกอยู่`,
+      async () => {
+        try {
+          await deleteAccount(user.uid, account.id);
+          setSelectedAccountDetails((current) => (current?.id === account.id ? null : current));
+          addNotification(user.uid, `ลบแหล่งเงิน "${account.name}" สำเร็จ`, 'success');
+        } catch (err: any) {
+          console.error(err);
+          const message = String(err?.message || '');
+          if (message.toLowerCase().includes('foreign key') || err?.code === '23503') {
+            alert('ลบบัญชีนี้ไม่ได้ เพราะยังมีธุรกรรมหรือรายการอื่นผูกอยู่ กรุณาลบหรือย้ายรายการที่เกี่ยวข้องก่อน');
+          } else {
+            alert('เกิดข้อผิดพลาดในการลบแหล่งเงิน');
+          }
+        }
+      },
+      true,
+    );
   };
 
   const handleUpdateTransaction = async (e: React.FormEvent) => {
@@ -2146,10 +2184,18 @@ export default function App() {
                                 <button
                                   id={`btn-edit-acc-${acc.id}`}
                                   onClick={() => setEditingAccount(acc)}
-                                  className="text-slate-400 hover:text-indigo-600 p-2 hover:bg-white rounded-xl border border-slate-150 shadow-xs transition-all active:scale-90"
+                                  className="text-indigo-600 bg-white hover:bg-indigo-50 p-2 rounded-xl border border-indigo-100 shadow-xs transition-all active:scale-90"
                                   title="แก้ไขบัญชี"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  id={`btn-delete-acc-${acc.id}`}
+                                  onClick={() => handleDeleteAccount(acc)}
+                                  className="text-rose-600 bg-white hover:bg-rose-50 p-2 rounded-xl border border-rose-100 shadow-xs transition-all active:scale-90"
+                                  title="ลบบัญชี"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </div>
@@ -2203,10 +2249,18 @@ export default function App() {
                                     <button
                                       id={`btn-edit-card-${acc.id}`}
                                       onClick={() => setEditingAccount(acc)}
-                                      className="text-slate-400 hover:text-indigo-600 p-2 hover:bg-white rounded-xl border border-slate-150 shadow-xs transition-all active:scale-90"
+                                      className="text-indigo-600 bg-white hover:bg-indigo-50 p-2 rounded-xl border border-indigo-100 shadow-xs transition-all active:scale-90"
                                       title="แก้ไขบัตร"
                                     >
                                       <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      id={`btn-delete-card-${acc.id}`}
+                                      onClick={() => handleDeleteAccount(acc)}
+                                      className="text-rose-600 bg-white hover:bg-rose-50 p-2 rounded-xl border border-rose-100 shadow-xs transition-all active:scale-90"
+                                      title="ลบบัตร"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
                                 </div>
@@ -2332,7 +2386,7 @@ export default function App() {
                             <button
                               id={`btn-edit-tx-${tx.id}`}
                               onClick={() => setEditingTransaction(tx)}
-                              className="text-slate-400 hover:text-indigo-600 p-2 hover:bg-slate-100 rounded-xl transition-all"
+                              className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 p-2 rounded-xl border border-indigo-100 transition-all active:scale-90"
                               title="แก้ไขรายการ"
                             >
                               <Pencil className="w-4 h-4" />
@@ -2355,7 +2409,8 @@ export default function App() {
                                   true
                                 );
                               }}
-                              className="text-slate-400 hover:text-rose-600 p-2 hover:bg-slate-100 rounded-xl transition-all"
+                              className="text-rose-600 bg-rose-50 hover:bg-rose-100 p-2 rounded-xl border border-rose-100 transition-all active:scale-90"
+                              title="ลบรายการ"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -2487,7 +2542,7 @@ export default function App() {
                                 <button
                                   id={`btn-edit-rec-inc-${item.id}`}
                                   onClick={() => setEditingRecurringIncome(item)}
-                                  className="text-slate-400 hover:text-indigo-600 p-2 hover:bg-slate-100 rounded-xl transition-all"
+                                  className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 p-2 rounded-xl border border-indigo-100 transition-all active:scale-90"
                                   title="แก้ไขรายรับประจำ"
                                 >
                                   <Pencil className="w-4 h-4" />
@@ -2510,7 +2565,8 @@ export default function App() {
                                       true
                                     );
                                   }}
-                                  className="text-slate-400 hover:text-rose-600 p-2 hover:bg-slate-100 rounded-xl transition-all"
+                                  className="text-rose-600 bg-rose-50 hover:bg-rose-100 p-2 rounded-xl border border-rose-100 transition-all active:scale-90"
+                                  title="ลบรายรับประจำ"
                                 >
                                   <Trash2 className="w-4.5 h-4.5" />
                                 </button>
@@ -2591,7 +2647,7 @@ export default function App() {
                                 <button
                                   id={`btn-edit-rec-${item.id}`}
                                   onClick={() => setEditingRecurringExpense(item)}
-                                  className="text-slate-400 hover:text-indigo-600 p-2 hover:bg-slate-100 rounded-xl transition-all"
+                                  className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 p-2 rounded-xl border border-indigo-100 transition-all active:scale-90"
                                   title="แก้ไขรายการประจำ"
                                 >
                                   <Pencil className="w-4 h-4" />
@@ -2614,7 +2670,8 @@ export default function App() {
                                       true
                                     );
                                   }}
-                                  className="text-slate-400 hover:text-rose-600 p-2 hover:bg-slate-100 rounded-xl transition-all"
+                                  className="text-rose-600 bg-rose-50 hover:bg-rose-100 p-2 rounded-xl border border-rose-100 transition-all active:scale-90"
+                                  title="ลบรายการประจำ"
                                 >
                                   <Trash2 className="w-4.5 h-4.5" />
                                 </button>
@@ -2982,6 +3039,16 @@ export default function App() {
                             </span>
                             <button
                               onClick={() => {
+                                setSelectedAccountDetails(null);
+                                setEditingTransaction(tx);
+                              }}
+                              className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg border border-indigo-100 transition-all active:scale-90"
+                              title="แก้ไขรายการ"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
                                 requestConfirm(
                                   'ลบรายการธุรกรรม',
                                   `คุณต้องการลบรายการ "${tx.description || tx.category}" ยอดเงิน ${formatCurrency(tx.amount)} ใช่หรือไม่? ยอดคงเหลือของบัญชีจะถูกปรับย้อนกลับอัตโนมัติ`,
@@ -2996,7 +3063,7 @@ export default function App() {
                                   true
                                 );
                               }}
-                              className="text-slate-400 hover:text-rose-600 p-1.5 hover:bg-slate-50 rounded-lg transition-all"
+                              className="text-rose-600 bg-rose-50 hover:bg-rose-100 p-1.5 rounded-lg border border-rose-100 transition-all active:scale-90"
                               title="ลบรายการ"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

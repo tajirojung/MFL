@@ -366,6 +366,16 @@ export async function updateAccount(uid: string, accountId: string, updates: Par
   if (error) throw error;
 }
 
+export async function deleteAccount(uid: string, accountId: string) {
+  if (isMockUser(uid)) {
+    const key = `mock_accounts_${uid}`;
+    setMockList(key, getMockList<Account>(key).filter((a) => a.id !== accountId));
+    return;
+  }
+  const { error } = await supabase.from('accounts').delete().eq('id', accountId).eq('user_id', uid);
+  if (error) throw error;
+}
+
 export function subscribeTransactions(uid: string, familyId: string | null | undefined, callback: (transactions: Transaction[]) => void): Unsubscribe {
   if (isMockUser(uid)) return subscribeMockList(`mock_transactions_${uid}`, callback);
 
