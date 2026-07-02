@@ -358,10 +358,10 @@ export default function App() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
   const [newAccName, setNewAccName] = useState('');
   const [newAccType, setNewAccType] = useState<'savings' | 'credit_card'>('savings');
-  const [newAccBalance, setNewAccBalance] = useState<number>(0);
-  const [newAccLimit, setNewAccLimit] = useState<number>(0);
-  const [newAccInterest, setNewAccInterest] = useState<number>(16);
-  const [newAccStatementDate, setNewAccStatementDate] = useState<number>(15);
+  const [newAccBalance, setNewAccBalance] = useState('');
+  const [newAccLimit, setNewAccLimit] = useState('');
+  const [newAccInterest, setNewAccInterest] = useState('16');
+  const [newAccStatementDate, setNewAccStatementDate] = useState('15');
 
   const [showAddTxModal, setShowAddTxModal] = useState(false);
   const [txType, setTxType] = useState<'income' | 'expense'>('expense');
@@ -1142,27 +1142,42 @@ export default function App() {
     e.preventDefault();
     if (!newAccName.trim() || !user) return;
 
+    const balance = parseFloat(newAccBalance || '0');
+    const limit = parseFloat(newAccLimit || '0');
+    const interestRate = parseFloat(newAccInterest || '0');
+    const statementDate = parseInt(newAccStatementDate || '15');
+
+    if (Number.isNaN(balance) || balance < 0) {
+      alert('กรุณากรอกยอดเงินตั้งต้นให้ถูกต้อง');
+      return;
+    }
+    if (newAccType === 'credit_card' && (Number.isNaN(limit) || limit < 0)) {
+      alert('กรุณากรอกวงเงินบัตรเครดิตให้ถูกต้อง');
+      return;
+    }
+
     try {
       await addAccount(user.uid, {
         userId: user.uid,
-        name: newAccName,
+        name: newAccName.trim(),
         type: newAccType,
-        balance: newAccType === 'savings' ? newAccBalance : newAccBalance, // for card, starting remaining limit
-        limit: newAccType === 'credit_card' ? newAccLimit : undefined,
-        interestRate: newAccType === 'credit_card' ? newAccInterest : undefined,
-        statementDate: newAccType === 'credit_card' ? newAccStatementDate : undefined,
+        balance,
+        limit: newAccType === 'credit_card' ? limit : undefined,
+        interestRate: newAccType === 'credit_card' ? interestRate : undefined,
+        statementDate: newAccType === 'credit_card' ? statementDate : undefined,
       });
 
       // Reset
       setNewAccName('');
-      setNewAccBalance(0);
-      setNewAccLimit(0);
-      setNewAccInterest(16);
-      setNewAccStatementDate(15);
+      setNewAccBalance('');
+      setNewAccLimit('');
+      setNewAccInterest('16');
+      setNewAccStatementDate('15');
       setShowAddAccountModal(false);
       addNotification(user.uid, `สร้างแหล่งเงิน "${newAccName}" เรียบร้อยแล้ว`, 'success');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(err?.message || 'เกิดข้อผิดพลาดในการสร้างแหล่งเงิน');
     }
   };
 
@@ -3009,7 +3024,6 @@ export default function App() {
                     <input
                       type="number"
                       step="any"
-                      required
                       min="0"
                       value={editingAccount.balance}
                       onChange={(e) => setEditingAccount({ ...editingAccount, balance: parseFloat(e.target.value) || 0 })}
@@ -3024,7 +3038,6 @@ export default function App() {
                         <input
                           type="number"
                           step="any"
-                          required
                           min="0"
                           value={editingAccount.limit || 0}
                           onChange={(e) => setEditingAccount({ ...editingAccount, limit: parseFloat(e.target.value) || 0 })}
@@ -3037,7 +3050,6 @@ export default function App() {
                         <input
                           type="number"
                           step="any"
-                          required
                           min="0"
                           value={editingAccount.balance}
                           onChange={(e) => setEditingAccount({ ...editingAccount, balance: parseFloat(e.target.value) || 0 })}
@@ -3051,7 +3063,6 @@ export default function App() {
                         <label className="text-xs text-slate-700 font-semibold block">อัตราดอกเบี้ย (%)</label>
                         <input
                           type="number"
-                          required
                           min="0"
                           max="100"
                           step="any"
@@ -3065,7 +3076,6 @@ export default function App() {
                         <label className="text-xs text-slate-700 font-semibold block">วันที่ตัดรอบบัตร (1-28)</label>
                         <input
                           type="number"
-                          required
                           min="1"
                           max="28"
                           value={editingAccount.statementDate || 15}
@@ -3499,7 +3509,7 @@ export default function App() {
                     onChange={(e: any) => setNewAccType(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                   >
-                    <option value="savings">💰 บัญชีสะสมทรัพย์ / เงินสด</option>
+                    <option value="savings">💰 บัญชีธนาคาร / เงินสด</option>
                     <option value="credit_card">💳 บัตรเครดิต (พร้อมระบุวงเงินและวันตัดรอบ)</option>
                   </select>
                 </div>
@@ -3509,7 +3519,7 @@ export default function App() {
                   <input
                     type="text"
                     required
-                    placeholder="เช่น เงินสดกระเป๋า หรือ บัตรเครดิต K-Class"
+                    placeholder="เช่น บัญชีธนาคาร KBank, เงินสดกระเป๋า หรือ บัตรเครดิต K-Class"
                     value={newAccName}
                     onChange={(e) => setNewAccName(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
@@ -3522,10 +3532,9 @@ export default function App() {
                     <input
                       type="number"
                       step="any"
-                      required
                       min="0"
                       value={newAccBalance}
-                      onChange={(e) => setNewAccBalance(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => setNewAccBalance(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
@@ -3537,14 +3546,13 @@ export default function App() {
                         <input
                           type="number"
                           step="any"
-                          required
                           min="0"
                           value={newAccLimit}
                           onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
+                            const val = e.target.value;
                             setNewAccLimit(val);
                             // Default starting balance to be equal to full limit if not edited yet
-                            if (newAccBalance === 0) setNewAccBalance(val);
+                            if (newAccBalance === '') setNewAccBalance(val);
                           }}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                         />
@@ -3555,10 +3563,9 @@ export default function App() {
                         <input
                           type="number"
                           step="any"
-                          required
                           min="0"
                           value={newAccBalance}
-                          onChange={(e) => setNewAccBalance(parseFloat(e.target.value) || 0)}
+                          onChange={(e) => setNewAccBalance(e.target.value)}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                         />
                       </div>
@@ -3569,12 +3576,11 @@ export default function App() {
                         <label className="text-xs text-slate-700 font-semibold block">อัตราดอกเบี้ย (%)</label>
                         <input
                           type="number"
-                          required
                           min="0"
                           max="100"
                           step="any"
                           value={newAccInterest}
-                          onChange={(e) => setNewAccInterest(parseFloat(e.target.value) || 0)}
+                          onChange={(e) => setNewAccInterest(e.target.value)}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                         />
                       </div>
@@ -3583,11 +3589,10 @@ export default function App() {
                         <label className="text-xs text-slate-700 font-semibold block">วันที่ตัดรอบบัตร (1-28)</label>
                         <input
                           type="number"
-                          required
                           min="1"
                           max="28"
                           value={newAccStatementDate}
-                          onChange={(e) => setNewAccStatementDate(parseInt(e.target.value) || 15)}
+                          onChange={(e) => setNewAccStatementDate(e.target.value)}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                         />
                       </div>
