@@ -437,16 +437,90 @@ export async function deleteTransaction(uid: string, tx: Transaction) {
 export async function updateTransaction(uid: string, transactionId: string, oldTx: Transaction, updates: Partial<Transaction>) {
   if (isMockUser(uid)) {
     const key = `mock_transactions_${uid}`;
-    setMockList(key, getMockList<Transaction>(key).map((t) => (t.id === transactionId ? { ...t, ...updates } : t)));
+    const nextTx = { ...oldTx, ...updates };
+    setMockList(key, getMockList<Transaction>(key).map((t) => (t.id === transactionId ? nextTx : t)));
+
+    const reverseOld = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
+    const applyNew = nextTx.type === 'income' ? nextTx.amount : -nextTx.amount;
+    const accountsKey = `mock_accounts_${uid}`;
+    setMockList(
+      accountsKey,
+      getMockList<Account>(accountsKey).map((a) => {
+        let diff = 0;
+        if (a.id === oldTx.accountId) diff += reverseOld;
+        if (a.id === nextTx.accountId) diff += applyNew;
+        return diff === 0 ? a : { ...a, balance: a.balance + diff };
+      }),
+    );
     return;
   }
   const nextTx = { ...oldTx, ...updates };
   const { error } = await supabase.from('transactions').update(transactionToRow(nextTx)).eq('id', transactionId);
   if (error) throw error;
+  const reverseOld = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
+  const applyNew = nextTx.type === 'income' ? nextTx.amount : -nextTx.amount;
   if (oldTx.accountId === nextTx.accountId) {
-    const oldDiff = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
-    const newDiff = nextTx.type === 'income' ? nextTx.amount : -nextTx.amount;
-    await adjustAccountBalance(nextTx.accountId, oldDiff + newDiff);
+    await adjustAccountBalance(nextTx.accountId, reverseOld + applyNew);
+  } else {
+    await adjustAccountBalance(oldTx.accountId, reverseOld);
+    await adjustAccountBalance(nextTx.accountId, applyNew);
+  }
+}
+
+export async function createTransferTransactions(
+  uid: string,
+  details: {
+    userName: string;
+    familyId?: string | null;
+    amount: number;
+    date: string;
+    fromAccountId: string;
+    toAccountId: string;
+    fromAccountName?: string;
+    toAccountName?: string;
+    note?: string;
+  },
+) {
+  if (!details.fromAccountId || !details.toAccountId || details.fromAccountId === details.toAccountId) {
+    throw new Error('Transfer accounts must be different');
+  }
+  if (!Number.isFinite(details.amount) || details.amount <= 0) {
+    throw new Error('Transfer amount must be greater than zero');
+  }
+
+  const category = 'โอนเงินระหว่างบัญชี';
+  const trimmedNote = details.note?.trim();
+  const expenseDescription = trimmedNote || `โอนเงินไปบัญชี ${details.toAccountName || ''}`.trim();
+  const incomeDescription = trimmedNote || `รับโอนจากบัญชี ${details.fromAccountName || ''}`.trim();
+
+  const expenseTx = await addTransaction(uid, {
+    userId: uid,
+    userName: details.userName,
+    familyId: details.familyId || null,
+    amount: details.amount,
+    type: 'expense',
+    category,
+    date: details.date,
+    description: expenseDescription,
+    accountId: details.fromAccountId,
+  });
+
+  try {
+    const incomeTx = await addTransaction(uid, {
+      userId: uid,
+      userName: details.userName,
+      familyId: details.familyId || null,
+      amount: details.amount,
+      type: 'income',
+      category,
+      date: details.date,
+      description: incomeDescription,
+      accountId: details.toAccountId,
+    });
+    return { expenseTx, incomeTx };
+  } catch (error) {
+    await deleteTransaction(uid, expenseTx);
+    throw error;
   }
 }
 

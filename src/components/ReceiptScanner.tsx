@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Trash2, Check, FileText } from 'lucide-react';
-import { addTransaction } from '../dbService';
+import { addTransaction, createTransferTransactions } from '../dbService';
 import { Account, CustomCategory, CATEGORIES } from '../types';
 import { formatCurrency } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -211,6 +211,11 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
     if (!slip || slip.isSaved || slip.loading || slip.error) return;
 
     try {
+      if (!Number.isFinite(slip.amount) || slip.amount <= 0) {
+        alert('กรุณากรอกยอดเงินที่มากกว่า 0');
+        return;
+      }
+
       if (slip.entryType === 'transfer') {
         if (!slip.fromAccountId || !slip.toAccountId || slip.fromAccountId === slip.toAccountId) {
           alert('กรุณาเลือกบัญชีต้นทางและบัญชีปลายทางที่แตกต่างกัน');
@@ -221,28 +226,16 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
         const toAcc = accounts.find(acc => acc.id === slip.toAccountId);
         const note = slip.description || `โอนเงินจากสลิป ${slip.storeName || ''}`.trim();
 
-        await addTransaction(user.uid, {
-          userId: user.uid,
+        await createTransferTransactions(user.uid, {
           userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
           familyId: profile?.familyId || null,
           amount: slip.amount,
-          type: 'expense',
-          category: 'โอนเงินระหว่างบัญชี',
           date: slip.date,
-          description: note || `โอนเงินไปบัญชี ${toAcc?.name || ''}`,
-          accountId: slip.fromAccountId,
-        });
-
-        await addTransaction(user.uid, {
-          userId: user.uid,
-          userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
-          familyId: profile?.familyId || null,
-          amount: slip.amount,
-          type: 'income',
-          category: 'โอนเงินระหว่างบัญชี',
-          date: slip.date,
-          description: note || `รับโอนจากบัญชี ${fromAcc?.name || ''}`,
-          accountId: slip.toAccountId,
+          fromAccountId: slip.fromAccountId,
+          toAccountId: slip.toAccountId,
+          fromAccountName: fromAcc?.name,
+          toAccountName: toAcc?.name,
+          note,
         });
       } else {
         await addTransaction(user.uid, {
@@ -279,6 +272,10 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
     let savedCount = 0;
     for (const slip of scannables) {
       try {
+        if (!Number.isFinite(slip.amount) || slip.amount <= 0) {
+          continue;
+        }
+
         if (slip.entryType === 'transfer') {
           if (!slip.fromAccountId || !slip.toAccountId || slip.fromAccountId === slip.toAccountId) {
             continue;
@@ -287,28 +284,16 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
           const toAcc = accounts.find(acc => acc.id === slip.toAccountId);
           const note = slip.description || `โอนเงินจากสลิป ${slip.storeName || ''}`.trim();
 
-          await addTransaction(user.uid, {
-            userId: user.uid,
+          await createTransferTransactions(user.uid, {
             userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
             familyId: profile?.familyId || null,
             amount: slip.amount,
-            type: 'expense',
-            category: 'โอนเงินระหว่างบัญชี',
             date: slip.date,
-            description: note || `โอนเงินไปบัญชี ${toAcc?.name || ''}`,
-            accountId: slip.fromAccountId,
-          });
-
-          await addTransaction(user.uid, {
-            userId: user.uid,
-            userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
-            familyId: profile?.familyId || null,
-            amount: slip.amount,
-            type: 'income',
-            category: 'โอนเงินระหว่างบัญชี',
-            date: slip.date,
-            description: note || `รับโอนจากบัญชี ${fromAcc?.name || ''}`,
-            accountId: slip.toAccountId,
+            fromAccountId: slip.fromAccountId,
+            toAccountId: slip.toAccountId,
+            fromAccountName: fromAcc?.name,
+            toAccountName: toAcc?.name,
+            note,
           });
         } else {
           await addTransaction(user.uid, {

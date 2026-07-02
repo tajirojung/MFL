@@ -36,7 +36,8 @@ import {
   updateAccount,
   updateTransaction,
   updateBudget,
-  updateCustomCategory
+  updateCustomCategory,
+  createTransferTransactions
 } from './dbService';
 import { Account, Transaction, Budget, BudgetItem, RecurringExpense, RecurringIncome, AppNotification, FamilyGroup, FamilyInvitation, UserProfile, CATEGORIES, CustomCategory } from './types';
 import { formatCurrency, formatDate, getMonthLabel } from './utils';
@@ -505,6 +506,17 @@ export default function App() {
     return [...CATEGORIES.expense, ...customCategories.filter(c => c.type === 'expense').map(c => c.name)];
   };
 
+  const withCurrentCategory = (categories: string[], current?: string) => {
+    return Array.from(new Set(current ? [current, ...categories] : categories));
+  };
+
+  const getBudgetCategories = () => {
+    const currentBudgetCategories = budgets
+      .filter((budget) => budget.month === selectedMonth)
+      .map((budget) => budget.category);
+    return Array.from(new Set([...getExpenseCategories(), ...currentBudgetCategories]));
+  };
+
   // Auth Listener
   useEffect(() => {
     const handleSupabaseUser = async (supabaseUser: any | null) => {
@@ -963,6 +975,20 @@ export default function App() {
   const handleUpdateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAccount || !editingAccount.name.trim() || !user) return;
+    if (editingAccount.balance < 0 || !Number.isFinite(editingAccount.balance)) {
+      alert('กรุณากรอกยอดคงเหลือให้ถูกต้อง');
+      return;
+    }
+    if (editingAccount.type === 'credit_card') {
+      if ((editingAccount.limit ?? 0) < 0 || !Number.isFinite(editingAccount.limit ?? 0)) {
+        alert('กรุณากรอกวงเงินบัตรให้ถูกต้อง');
+        return;
+      }
+      if (!editingAccount.statementDate || editingAccount.statementDate < 1 || editingAccount.statementDate > 31) {
+        alert('กรุณากรอกวันที่ตัดรอบบัตรระหว่าง 1-31');
+        return;
+      }
+    }
 
     try {
       await updateAccount(user.uid, editingAccount.id, {
@@ -1022,28 +1048,16 @@ export default function App() {
 
     const executeTransfer = async () => {
       try {
-        await addTransaction(user.uid, {
-          userId: user.uid,
+        await createTransferTransactions(user.uid, {
           userName: profile?.displayName || user.displayName || 'ผู้ใช้',
           familyId: profile?.familyId || null,
           amount: amt,
-          type: 'expense',
-          category: 'โอนเงินระหว่างบัญชี',
           date: transferDate,
-          description: transferNote.trim() || `โอนเงินไปบัญชี ${toAcc.name}`,
-          accountId: transferFromId,
-        });
-
-        await addTransaction(user.uid, {
-          userId: user.uid,
-          userName: profile?.displayName || user.displayName || 'ผู้ใช้',
-          familyId: profile?.familyId || null,
-          amount: amt,
-          type: 'income',
-          category: 'โอนเงินระหว่างบัญชี',
-          date: transferDate,
-          description: transferNote.trim() || `รับโอนจากบัญชี ${fromAcc.name}`,
-          accountId: transferToId,
+          fromAccountId: transferFromId,
+          toAccountId: transferToId,
+          fromAccountName: fromAcc.name,
+          toAccountName: toAcc.name,
+          note: transferNote,
         });
 
         setShowTransferModal(false);
@@ -1073,6 +1087,10 @@ export default function App() {
   const handleUpdateRecurringExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRecurringExpense || !editingRecurringExpense.name.trim() || editingRecurringExpense.amount <= 0 || !user) return;
+    if (editingRecurringExpense.isInstallment && (!editingRecurringExpense.installmentMonths || editingRecurringExpense.installmentMonths < 1)) {
+      alert('กรุณากรอกจำนวนงวดให้ถูกต้อง');
+      return;
+    }
 
     try {
       await updateRecurringExpense(user.uid, editingRecurringExpense.id, {
@@ -1097,6 +1115,10 @@ export default function App() {
   const handleUpdateRecurringIncome = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRecurringIncome || !editingRecurringIncome.name.trim() || !user) return;
+    if (!editingRecurringIncome.dayOfMonth || editingRecurringIncome.dayOfMonth < 1 || editingRecurringIncome.dayOfMonth > 31) {
+      alert('กรุณากรอกวันที่รับรายรับประจำระหว่าง 1-31');
+      return;
+    }
 
     const total = (editingRecurringIncome.baseSalary || 0) +
                   (editingRecurringIncome.ot || 0) +
@@ -1222,6 +1244,14 @@ export default function App() {
   const handleCreateRecurring = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || recAmount <= 0 || !recAccountId || !recName.trim()) return;
+    if (!recDueDate || recDueDate < 1 || recDueDate > 31) {
+      alert('กรุณากรอกวันที่ต้องชำระระหว่าง 1-31');
+      return;
+    }
+    if (isInstallment && (!installmentMonths || installmentMonths < 1)) {
+      alert('กรุณากรอกจำนวนงวดให้ถูกต้อง');
+      return;
+    }
 
     try {
       // Calculate next due date
@@ -1265,6 +1295,10 @@ export default function App() {
   const handleCreateRecurringIncome = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !recIncName.trim() || !recIncAccountId) return;
+    if (!recIncDayOfMonth || recIncDayOfMonth < 1 || recIncDayOfMonth > 31) {
+      alert('กรุณากรอกวันที่รับรายรับประจำระหว่าง 1-31');
+      return;
+    }
 
     const total = recIncBaseSalary + recIncOt + recIncCommission + recIncIncentive + recIncOther + recIncFreelance;
     if (total <= 0) {
@@ -2616,7 +2650,7 @@ export default function App() {
                   <h3 className="font-bold text-base text-slate-800 mb-6">ตั้งงบประมาณรายหมวดหมู่ (หมวดหมู่รายจ่าย)</h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {getExpenseCategories().map((category) => (
+                    {getBudgetCategories().map((category) => (
                       <BudgetCategoryItem
                         key={category}
                         category={category}
@@ -3025,7 +3059,7 @@ export default function App() {
                       type="number"
                       step="any"
                       min="0"
-                      value={editingAccount.balance}
+                      value={editingAccount.balance || ''}
                       onChange={(e) => setEditingAccount({ ...editingAccount, balance: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                     />
@@ -3039,7 +3073,7 @@ export default function App() {
                           type="number"
                           step="any"
                           min="0"
-                          value={editingAccount.limit || 0}
+                          value={editingAccount.limit || ''}
                           onChange={(e) => setEditingAccount({ ...editingAccount, limit: parseFloat(e.target.value) || 0 })}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                         />
@@ -3051,7 +3085,7 @@ export default function App() {
                           type="number"
                           step="any"
                           min="0"
-                          value={editingAccount.balance}
+                          value={editingAccount.balance || ''}
                           onChange={(e) => setEditingAccount({ ...editingAccount, balance: parseFloat(e.target.value) || 0 })}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                         />
@@ -3066,7 +3100,7 @@ export default function App() {
                           min="0"
                           max="100"
                           step="any"
-                          value={editingAccount.interestRate || 0}
+                          value={editingAccount.interestRate || ''}
                           onChange={(e) => setEditingAccount({ ...editingAccount, interestRate: parseFloat(e.target.value) || 0 })}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                         />
@@ -3078,8 +3112,8 @@ export default function App() {
                           type="number"
                           min="1"
                           max="28"
-                          value={editingAccount.statementDate || 15}
-                          onChange={(e) => setEditingAccount({ ...editingAccount, statementDate: parseInt(e.target.value) || 15 })}
+                          value={editingAccount.statementDate || ''}
+                          onChange={(e) => setEditingAccount({ ...editingAccount, statementDate: e.target.value === '' ? 0 : parseInt(e.target.value) || 15 })}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                         />
                       </div>
@@ -3152,7 +3186,7 @@ export default function App() {
                     step="any"
                     required
                     min="0.01"
-                    value={editingTransaction.amount}
+                    value={editingTransaction.amount || ''}
                     onChange={(e) => setEditingTransaction({ ...editingTransaction, amount: parseFloat(e.target.value) || 0 })}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                   />
@@ -3182,10 +3216,10 @@ export default function App() {
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                   >
                     {editingTransaction.type === 'income'
-                      ? getIncomeCategories().map((cat) => (
+                      ? withCurrentCategory(getIncomeCategories(), editingTransaction.category).map((cat) => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))
-                      : getExpenseCategories().map((cat) => (
+                      : withCurrentCategory(getExpenseCategories(), editingTransaction.category).map((cat) => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
                   </select>
@@ -3264,7 +3298,7 @@ export default function App() {
                     step="any"
                     required
                     min="0.01"
-                    value={editingRecurringExpense.amount}
+                    value={editingRecurringExpense.amount || ''}
                     onChange={(e) => setEditingRecurringExpense({ ...editingRecurringExpense, amount: parseFloat(e.target.value) || 0 })}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                   />
@@ -3307,7 +3341,7 @@ export default function App() {
                     onChange={(e) => setEditingRecurringExpense({ ...editingRecurringExpense, category: e.target.value })}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                   >
-                    {getExpenseCategories().map((cat) => (
+                    {withCurrentCategory(getExpenseCategories(), editingRecurringExpense.category).map((cat) => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
@@ -3390,7 +3424,7 @@ export default function App() {
                     <input
                       type="number"
                       min="0"
-                      value={editingRecurringIncome.baseSalary}
+                      value={editingRecurringIncome.baseSalary || ''}
                       onChange={(e) => setEditingRecurringIncome({ ...editingRecurringIncome, baseSalary: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                     />
@@ -3401,7 +3435,7 @@ export default function App() {
                     <input
                       type="number"
                       min="0"
-                      value={editingRecurringIncome.ot}
+                      value={editingRecurringIncome.ot || ''}
                       onChange={(e) => setEditingRecurringIncome({ ...editingRecurringIncome, ot: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                     />
@@ -3414,7 +3448,7 @@ export default function App() {
                     <input
                       type="number"
                       min="0"
-                      value={editingRecurringIncome.commission}
+                      value={editingRecurringIncome.commission || ''}
                       onChange={(e) => setEditingRecurringIncome({ ...editingRecurringIncome, commission: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                     />
@@ -3425,7 +3459,7 @@ export default function App() {
                     <input
                       type="number"
                       min="0"
-                      value={editingRecurringIncome.incentive}
+                      value={editingRecurringIncome.incentive || ''}
                       onChange={(e) => setEditingRecurringIncome({ ...editingRecurringIncome, incentive: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                     />
@@ -3438,7 +3472,7 @@ export default function App() {
                     <input
                       type="number"
                       min="0"
-                      value={editingRecurringIncome.freelanceIncome}
+                      value={editingRecurringIncome.freelanceIncome || ''}
                       onChange={(e) => setEditingRecurringIncome({ ...editingRecurringIncome, freelanceIncome: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                     />
@@ -3449,7 +3483,7 @@ export default function App() {
                     <input
                       type="number"
                       min="0"
-                      value={editingRecurringIncome.otherIncome}
+                      value={editingRecurringIncome.otherIncome || ''}
                       onChange={(e) => setEditingRecurringIncome({ ...editingRecurringIncome, otherIncome: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                     />
@@ -3463,8 +3497,8 @@ export default function App() {
                     required
                     min="1"
                     max="31"
-                    value={editingRecurringIncome.dayOfMonth}
-                    onChange={(e) => setEditingRecurringIncome({ ...editingRecurringIncome, dayOfMonth: parseInt(e.target.value) || 25 })}
+                    value={editingRecurringIncome.dayOfMonth || ''}
+                    onChange={(e) => setEditingRecurringIncome({ ...editingRecurringIncome, dayOfMonth: e.target.value === '' ? 0 : parseInt(e.target.value) || 25 })}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm font-semibold"
                   />
                 </div>
@@ -4129,8 +4163,8 @@ export default function App() {
                       required
                       min="1"
                       max="31"
-                      value={recDueDate}
-                      onChange={(e) => setRecDueDate(parseInt(e.target.value) || 1)}
+                      value={recDueDate || ''}
+                      onChange={(e) => setRecDueDate(e.target.value === '' ? 0 : parseInt(e.target.value) || 1)}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
@@ -4175,8 +4209,8 @@ export default function App() {
                             type="number"
                             min="2"
                             max="60"
-                            value={installmentMonths}
-                            onChange={(e) => setInstallmentMonths(parseInt(e.target.value) || 10)}
+                            value={installmentMonths || ''}
+                            onChange={(e) => setInstallmentMonths(e.target.value === '' ? 0 : parseInt(e.target.value) || 10)}
                             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                           />
                         </div>
@@ -4188,7 +4222,7 @@ export default function App() {
                             step="any"
                             min="0"
                             max="30"
-                            value={installmentInterest}
+                            value={installmentInterest || ''}
                             onChange={(e) => setInstallmentInterest(parseFloat(e.target.value) || 0)}
                             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                           />
@@ -4333,7 +4367,7 @@ export default function App() {
                       min="1"
                       max="31"
                       value={recIncDayOfMonth}
-                      onChange={(e) => setRecIncDayOfMonth(parseInt(e.target.value) || 25)}
+                      onChange={(e) => setRecIncDayOfMonth(e.target.value === '' ? 0 : parseInt(e.target.value) || 25)}
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
