@@ -393,11 +393,13 @@ export function subscribeTransactions(uid: string, familyId: string | null | und
 async function adjustAccountBalance(accountId: string, diff: number) {
   const { data, error } = await supabase.from('accounts').select('balance').eq('id', accountId).single();
   if (error) throw error;
+  const newBalance = Number(data.balance || 0) + diff;
   const { error: updateError } = await supabase
     .from('accounts')
-    .update({ balance: Number(data.balance || 0) + diff })
+    .update({ balance: newBalance })
     .eq('id', accountId);
   if (updateError) throw updateError;
+  return newBalance;
 }
 
 export async function addTransaction(uid: string, tx: Omit<Transaction, 'id' | 'createdAt'>) {
@@ -430,18 +432,22 @@ export async function deleteTransaction(uid: string, tx: Transaction) {
     const key = `mock_transactions_${uid}`;
     setMockList(key, getMockList<Transaction>(key).filter((t) => t.id !== tx.id));
     const accountsKey = `mock_accounts_${uid}`;
+    let newBalance: number | undefined;
     setMockList(
       accountsKey,
-      getMockList<Account>(accountsKey).map((a) =>
-        a.id === tx.accountId ? { ...a, balance: a.balance + (tx.type === 'income' ? -tx.amount : tx.amount) } : a,
-      ),
+      getMockList<Account>(accountsKey).map((a) => {
+        if (a.id !== tx.accountId) return a;
+        newBalance = a.balance + (tx.type === 'income' ? -tx.amount : tx.amount);
+        return { ...a, balance: newBalance };
+      }),
     );
-    return;
+    return { accountId: tx.accountId, balance: newBalance };
   }
 
   const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
   if (error) throw error;
-  await adjustAccountBalance(tx.accountId, tx.type === 'income' ? -tx.amount : tx.amount);
+  const balance = await adjustAccountBalance(tx.accountId, tx.type === 'income' ? -tx.amount : tx.amount);
+  return { accountId: tx.accountId, balance };
 }
 
 export async function updateTransaction(uid: string, transactionId: string, oldTx: Transaction, updates: Partial<Transaction>) {

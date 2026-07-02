@@ -17,6 +17,7 @@ import {
   addTransaction,
   deleteTransaction,
   saveBudget,
+  deleteBudget,
   addRecurringExpense,
   deleteRecurringExpense,
   updateRecurringExpense,
@@ -60,9 +61,11 @@ interface BudgetCategoryItemProps {
   user: any;
   profile: any;
   requestConfirm: (title: string, message: string, onConfirm: () => void, danger?: boolean) => void;
+  onBudgetSaved: (category: string, amount: number, month: string, items: BudgetItem[]) => void;
+  onBudgetDeleted: (id: string) => void;
 }
 
-function BudgetCategoryItem({ category, budgets, selectedMonth, user, profile, requestConfirm }: BudgetCategoryItemProps) {
+function BudgetCategoryItem({ category, budgets, selectedMonth, user, profile, requestConfirm, onBudgetSaved, onBudgetDeleted }: BudgetCategoryItemProps) {
   const existingBudget = budgets.find(
     (b) => b.category === category && b.month === selectedMonth
   );
@@ -103,6 +106,7 @@ function BudgetCategoryItem({ category, budgets, selectedMonth, user, profile, r
       return;
     }
     await saveBudget(user.uid, profile?.familyId, category, amt, selectedMonth, []);
+    onBudgetSaved(category, amt, selectedMonth, []);
     alert(`บันทึกงบประมาณ "${category}" ยอดเงิน ${formatCurrency(amt)} สำเร็จ!`);
   };
 
@@ -125,6 +129,7 @@ function BudgetCategoryItem({ category, budgets, selectedMonth, user, profile, r
 
     const newTotal = updatedItems.reduce((sum, item) => sum + item.amount, 0);
     await saveBudget(user.uid, profile?.familyId, category, newTotal, selectedMonth, updatedItems);
+    onBudgetSaved(category, newTotal, selectedMonth, updatedItems);
   };
 
   const handleDeleteItem = async (itemId: string, itemName: string) => {
@@ -137,6 +142,7 @@ function BudgetCategoryItem({ category, budgets, selectedMonth, user, profile, r
 
         const newTotal = updatedItems.reduce((sum, item) => sum + item.amount, 0);
         await saveBudget(user.uid, profile?.familyId, category, newTotal, selectedMonth, updatedItems);
+        onBudgetSaved(category, newTotal, selectedMonth, updatedItems);
       },
       true
     );
@@ -146,6 +152,21 @@ function BudgetCategoryItem({ category, budgets, selectedMonth, user, profile, r
     setEditingItemId(item.id);
     setEditingItemName(item.name);
     setEditingItemAmount(item.amount.toString());
+  };
+
+  const handleDeleteBudget = () => {
+    if (!existingBudget) return;
+    requestConfirm(
+      'ลบงบประมาณ',
+      `ต้องการลบงบประมาณ "${category}" ของเดือนนี้ใช่หรือไม่?`,
+      async () => {
+        await deleteBudget(user.uid, existingBudget.id);
+        setItems([]);
+        setDirectAmount('');
+        onBudgetDeleted(existingBudget.id);
+      },
+      true,
+    );
   };
 
   const handleSaveEdit = async (itemId: string) => {
@@ -165,6 +186,7 @@ function BudgetCategoryItem({ category, budgets, selectedMonth, user, profile, r
 
     const newTotal = updatedItems.reduce((sum, item) => sum + item.amount, 0);
     await saveBudget(user.uid, profile?.familyId, category, newTotal, selectedMonth, updatedItems);
+    onBudgetSaved(category, newTotal, selectedMonth, updatedItems);
   };
 
   return (
@@ -180,6 +202,16 @@ function BudgetCategoryItem({ category, budgets, selectedMonth, user, profile, r
           <p className="text-[9px] text-slate-400 font-bold uppercase">ยอดรวมงบประมาณ</p>
           <p className="text-xs font-extrabold text-indigo-600">{formatCurrency(totalAmount)}</p>
         </div>
+        {existingBudget && (
+          <button
+            type="button"
+            onClick={handleDeleteBudget}
+            className="text-rose-600 bg-rose-50 hover:bg-rose-100 p-1.5 rounded-lg border border-rose-100 transition-all active:scale-90"
+            title="ลบงบประมาณ"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Sub Items List */}
@@ -518,6 +550,66 @@ export default function App() {
     return Array.from(new Set([...getExpenseCategories(), ...currentBudgetCategories]));
   };
 
+  const applyDeletedAccount = (accountId: string) => {
+    setAccounts((prev) => prev.filter((account) => account.id !== accountId));
+    setSelectedAccountDetails((current) => (current?.id === accountId ? null : current));
+    setEditingAccount((current) => (current?.id === accountId ? null : current));
+  };
+
+  const applyDeletedTransaction = (tx: Transaction, balanceAfterDelete?: number) => {
+    const balanceDiff = tx.type === 'income' ? -tx.amount : tx.amount;
+    setTransactions((prev) => prev.filter((item) => item.id !== tx.id));
+    setAccounts((prev) =>
+      prev.map((account) =>
+        account.id === tx.accountId
+          ? { ...account, balance: balanceAfterDelete == null ? account.balance + balanceDiff : balanceAfterDelete }
+          : account,
+      ),
+    );
+    setEditingTransaction((current) => (current?.id === tx.id ? null : current));
+  };
+
+  const applyDeletedRecurringExpense = (id: string) => {
+    setRecurring((prev) => prev.filter((item) => item.id !== id));
+    setEditingRecurringExpense((current) => (current?.id === id ? null : current));
+  };
+
+  const applyDeletedRecurringIncome = (id: string) => {
+    setRecurringIncomes((prev) => prev.filter((item) => item.id !== id));
+    setEditingRecurringIncome((current) => (current?.id === id ? null : current));
+  };
+
+  const applyDeletedCustomCategory = (id: string) => {
+    setCustomCategories((prev) => prev.filter((category) => category.id !== id));
+    setEditingCategory((current) => (current?.id === id ? null : current));
+  };
+
+  const applySavedBudget = (category: string, amount: number, month: string, items: BudgetItem[]) => {
+    const targetId = profile?.familyId || user?.uid || '';
+    setBudgets((prev) => {
+      const existing = prev.find((budget) => budget.category === category && budget.month === month && budget.familyId === targetId);
+      if (existing) {
+        return prev.map((budget) => (budget.id === existing.id ? { ...budget, amount, items } : budget));
+      }
+      return [
+        ...prev,
+        {
+          id: `optimistic_${targetId}_${category}_${month}`,
+          familyId: targetId,
+          category,
+          amount,
+          month,
+          items,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+    });
+  };
+
+  const applyDeletedBudget = (id: string) => {
+    setBudgets((prev) => prev.filter((budget) => budget.id !== id));
+  };
+
   // Auth Listener
   useEffect(() => {
     const handleSupabaseUser = async (supabaseUser: any | null) => {
@@ -823,6 +915,7 @@ export default function App() {
               if (item.installmentMonths <= 1) {
                 // Last installment paid, delete the recurring expense
                 await deleteRecurringExpense(user.uid, item.id);
+                applyDeletedRecurringExpense(item.id);
                 await addNotification(
                   user.uid,
                   `🎉 การผ่อนชำระสำหรับ "${item.name}" ชำระครบกำหนดทั้งหมดเรียบร้อยแล้ว!`,
@@ -964,6 +1057,7 @@ export default function App() {
       async () => {
         try {
           await deleteCustomCategory(user.uid, id);
+          applyDeletedCustomCategory(id);
           addNotification(user.uid, `ลบประเภทรายการ "${name}" เรียบร้อยแล้ว`, 'info');
         } catch (err) {
           console.error(err);
@@ -1028,7 +1122,7 @@ export default function App() {
       async () => {
         try {
           await deleteAccount(user.uid, account.id);
-          setSelectedAccountDetails((current) => (current?.id === account.id ? null : current));
+          applyDeletedAccount(account.id);
           addNotification(user.uid, `ลบแหล่งเงิน "${account.name}" สำเร็จ`, 'success');
         } catch (err: any) {
           console.error(err);
@@ -1433,6 +1527,7 @@ export default function App() {
         if (recItem.installmentMonths <= 1) {
           // Last installment paid, delete the recurring expense
           await deleteRecurringExpense(user.uid, recItem.id);
+          applyDeletedRecurringExpense(recItem.id);
           addNotification(
             user.uid,
             `🎉 การผ่อนชำระสำหรับ "${recItem.name}" ชำระครบกำหนดทั้งหมดเรียบร้อยแล้ว!`,
@@ -2399,7 +2494,8 @@ export default function App() {
                                   'คุณต้องการลบรายการธุรกรรมนี้ใช่หรือไม่? ยอดคงเหลือของบัญชีจะถูกปรับย้อนกลับอัตโนมัติ',
                                   async () => {
                                     try {
-                                      await deleteTransaction(user.uid, tx);
+                                      const result = await deleteTransaction(user.uid, tx);
+                                      applyDeletedTransaction(tx, result?.balance);
                                       addNotification(user.uid, `ลบรายการ "${tx.description || tx.category}" สำเร็จ`, 'success');
                                     } catch (err) {
                                       console.error(err);
@@ -2556,6 +2652,7 @@ export default function App() {
                                       async () => {
                                         try {
                                           await deleteRecurringIncome(user.uid, item.id);
+                                          applyDeletedRecurringIncome(item.id);
                                           addNotification(user.uid, `ยกเลิกรายการรับประจำ "${item.name}" สำเร็จ`, 'success');
                                         } catch (err) {
                                           console.error(err);
@@ -2661,6 +2758,7 @@ export default function App() {
                                       async () => {
                                         try {
                                           await deleteRecurringExpense(user.uid, item.id);
+                                          applyDeletedRecurringExpense(item.id);
                                           addNotification(user.uid, `ยกเลิกรายการจ่ายประจำ "${item.name}" สำเร็จ`, 'success');
                                         } catch (err) {
                                           console.error(err);
@@ -2716,6 +2814,8 @@ export default function App() {
                         user={user}
                         profile={profile}
                         requestConfirm={requestConfirm}
+                        onBudgetSaved={applySavedBudget}
+                        onBudgetDeleted={applyDeletedBudget}
                       />
                     ))}
                   </div>
@@ -3054,7 +3154,8 @@ export default function App() {
                                   `คุณต้องการลบรายการ "${tx.description || tx.category}" ยอดเงิน ${formatCurrency(tx.amount)} ใช่หรือไม่? ยอดคงเหลือของบัญชีจะถูกปรับย้อนกลับอัตโนมัติ`,
                                   async () => {
                                     try {
-                                      await deleteTransaction(user.uid, tx);
+                                      const result = await deleteTransaction(user.uid, tx);
+                                      applyDeletedTransaction(tx, result?.balance);
                                       addNotification(user.uid, `ลบรายการธุรกรรมและปรับยอดเงินย้อนกลับสำเร็จ`, 'success');
                                     } catch (err) {
                                       console.error(err);
