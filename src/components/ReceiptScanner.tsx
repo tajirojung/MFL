@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Trash2, Check, FileText, ArrowRight } from 'lucide-react';
+import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Trash2, Check, FileText } from 'lucide-react';
 import { addTransaction } from '../dbService';
 import { Account, CustomCategory, CATEGORIES } from '../types';
 import { formatCurrency } from '../utils';
@@ -19,12 +19,17 @@ interface SlipItem {
   previewUrl: string;
   loading: boolean;
   error: string | null;
+  entryType: 'expense' | 'transfer';
   amount: number;
   date: string;
   storeName: string;
   description: string;
   category: string;
   accountId: string;
+  fromAccountId: string;
+  toAccountId: string;
+  transferSenderName: string;
+  transferReceiverName: string;
   isSaved: boolean;
 }
 
@@ -60,6 +65,7 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
       const previewUrl = URL.createObjectURL(file);
 
       const defaultAccount = accounts.length > 0 ? accounts[0].id : '';
+      const defaultToAccount = accounts.find(acc => acc.id !== defaultAccount)?.id || '';
 
       const newSlip: SlipItem = {
         id,
@@ -67,12 +73,17 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
         previewUrl,
         loading: true,
         error: null,
+        entryType: 'expense',
         amount: 0,
         date: new Date().toISOString().split('T')[0],
         storeName: '',
         description: '',
         category: getExpenseCategories()[0],
         accountId: defaultAccount,
+        fromAccountId: defaultAccount,
+        toAccountId: defaultToAccount,
+        transferSenderName: '',
+        transferReceiverName: '',
         isSaved: false
       };
 
@@ -121,14 +132,18 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
 
         setSlips(prev => prev.map(item => {
           if (item.id === slip.id) {
+            const isTransfer = Boolean(data.isTransferBetweenOwnAccounts);
             return {
               ...item,
               loading: false,
+              entryType: isTransfer ? 'transfer' : 'expense',
               amount: data.totalAmount || 0,
               date: data.date || new Date().toISOString().split('T')[0],
               storeName: data.storeName || 'ร้านค้าทั่วไป',
               description: data.description || '',
-              category: matchedCategory
+              category: isTransfer ? 'โอนเงินระหว่างบัญชี' : matchedCategory,
+              transferSenderName: data.transferSenderName || '',
+              transferReceiverName: data.transferReceiverName || ''
             };
           }
           return item;
@@ -196,17 +211,52 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
     if (!slip || slip.isSaved || slip.loading || slip.error) return;
 
     try {
-      await addTransaction(user.uid, {
-        userId: user.uid,
-        userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
-        familyId: profile?.familyId || null,
-        amount: slip.amount,
-        type: 'expense',
-        category: slip.category,
-        date: slip.date,
-        description: slip.storeName + (slip.description ? ` (${slip.description})` : ''),
-        accountId: slip.accountId,
-      });
+      if (slip.entryType === 'transfer') {
+        if (!slip.fromAccountId || !slip.toAccountId || slip.fromAccountId === slip.toAccountId) {
+          alert('กรุณาเลือกบัญชีต้นทางและบัญชีปลายทางที่แตกต่างกัน');
+          return;
+        }
+
+        const fromAcc = accounts.find(acc => acc.id === slip.fromAccountId);
+        const toAcc = accounts.find(acc => acc.id === slip.toAccountId);
+        const note = slip.description || `โอนเงินจากสลิป ${slip.storeName || ''}`.trim();
+
+        await addTransaction(user.uid, {
+          userId: user.uid,
+          userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
+          familyId: profile?.familyId || null,
+          amount: slip.amount,
+          type: 'expense',
+          category: 'โอนเงินระหว่างบัญชี',
+          date: slip.date,
+          description: note || `โอนเงินไปบัญชี ${toAcc?.name || ''}`,
+          accountId: slip.fromAccountId,
+        });
+
+        await addTransaction(user.uid, {
+          userId: user.uid,
+          userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
+          familyId: profile?.familyId || null,
+          amount: slip.amount,
+          type: 'income',
+          category: 'โอนเงินระหว่างบัญชี',
+          date: slip.date,
+          description: note || `รับโอนจากบัญชี ${fromAcc?.name || ''}`,
+          accountId: slip.toAccountId,
+        });
+      } else {
+        await addTransaction(user.uid, {
+          userId: user.uid,
+          userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
+          familyId: profile?.familyId || null,
+          amount: slip.amount,
+          type: 'expense',
+          category: slip.category,
+          date: slip.date,
+          description: slip.storeName + (slip.description ? ` (${slip.description})` : ''),
+          accountId: slip.accountId,
+        });
+      }
 
       setSlips(prev => prev.map(item => {
         if (item.id === id) {
@@ -229,17 +279,50 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
     let savedCount = 0;
     for (const slip of scannables) {
       try {
-        await addTransaction(user.uid, {
-          userId: user.uid,
-          userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
-          familyId: profile?.familyId || null,
-          amount: slip.amount,
-          type: 'expense',
-          category: slip.category,
-          date: slip.date,
-          description: slip.storeName + (slip.description ? ` (${slip.description})` : ''),
-          accountId: slip.accountId,
-        });
+        if (slip.entryType === 'transfer') {
+          if (!slip.fromAccountId || !slip.toAccountId || slip.fromAccountId === slip.toAccountId) {
+            continue;
+          }
+          const fromAcc = accounts.find(acc => acc.id === slip.fromAccountId);
+          const toAcc = accounts.find(acc => acc.id === slip.toAccountId);
+          const note = slip.description || `โอนเงินจากสลิป ${slip.storeName || ''}`.trim();
+
+          await addTransaction(user.uid, {
+            userId: user.uid,
+            userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
+            familyId: profile?.familyId || null,
+            amount: slip.amount,
+            type: 'expense',
+            category: 'โอนเงินระหว่างบัญชี',
+            date: slip.date,
+            description: note || `โอนเงินไปบัญชี ${toAcc?.name || ''}`,
+            accountId: slip.fromAccountId,
+          });
+
+          await addTransaction(user.uid, {
+            userId: user.uid,
+            userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
+            familyId: profile?.familyId || null,
+            amount: slip.amount,
+            type: 'income',
+            category: 'โอนเงินระหว่างบัญชี',
+            date: slip.date,
+            description: note || `รับโอนจากบัญชี ${fromAcc?.name || ''}`,
+            accountId: slip.toAccountId,
+          });
+        } else {
+          await addTransaction(user.uid, {
+            userId: user.uid,
+            userName: profile?.displayName || 'ผู้ใช้ทั่วไป',
+            familyId: profile?.familyId || null,
+            amount: slip.amount,
+            type: 'expense',
+            category: slip.category,
+            date: slip.date,
+            description: slip.storeName + (slip.description ? ` (${slip.description})` : ''),
+            accountId: slip.accountId,
+          });
+        }
         savedCount++;
         
         setSlips(prev => prev.map(item => {
@@ -414,7 +497,7 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
                       {/* Flex row for basic header of parsed data */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="truncate">
-                          <p className="text-xs text-slate-400 font-semibold">ชื่อร้านค้า (Gemini ตรวจจับ)</p>
+                          <p className="text-xs text-slate-400 font-semibold">{slip.entryType === 'transfer' ? 'ชื่อรายการ/ธนาคาร (Gemini ตรวจจับ)' : 'ชื่อร้านค้า (Gemini ตรวจจับ)'}</p>
                           <input
                             type="text"
                             disabled={slip.isSaved}
@@ -425,7 +508,7 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
                           />
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-xs text-slate-400 font-semibold">ยอดเงินรายจ่าย (บาท)</p>
+                          <p className="text-xs text-slate-400 font-semibold">{slip.entryType === 'transfer' ? 'ยอดเงินโอน (บาท)' : 'ยอดเงินรายจ่าย (บาท)'}</p>
                           <input
                             type="number"
                             step="any"
@@ -435,6 +518,29 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
                             onChange={(e) => setSlips(prev => prev.map(s => s.id === slip.id ? { ...s, amount: parseFloat(e.target.value) || 0 } : s))}
                             className="text-sm font-extrabold text-indigo-600 bg-transparent border-b border-dashed border-slate-300 focus:border-indigo-500 focus:outline-none text-right w-24 py-0.5 mt-0.5"
                           />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold block">ประเภทการบันทึก</label>
+                          <select
+                            disabled={slip.isSaved}
+                            value={slip.entryType}
+                            onChange={(e) => setSlips(prev => prev.map(s => s.id === slip.id ? { ...s, entryType: e.target.value as 'expense' | 'transfer' } : s))}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-700 mt-0.5 focus:outline-none focus:border-indigo-400"
+                          >
+                            <option value="expense">รายจ่ายจากใบเสร็จ/สลิป</option>
+                            <option value="transfer">โอนเงินระหว่างบัญชีของฉัน</option>
+                          </select>
+                          {slip.entryType === 'transfer' && (
+                            <p className="mt-1 text-[10px] text-indigo-600 font-semibold">
+                              AI พบว่าสลิปนี้อาจเป็นการโอนเงินระหว่างบัญชีเดียวกัน
+                              {slip.transferSenderName || slip.transferReceiverName
+                                ? ` (${slip.transferSenderName || '-'} → ${slip.transferReceiverName || '-'})`
+                                : ''}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -463,37 +569,74 @@ export default function ReceiptScanner({ user, profile, accounts, customCategori
                         </div>
                       </div>
 
-                      {/* Category and Account row */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-bold block">หมวดหมู่รายจ่าย</label>
-                          <select
-                            disabled={slip.isSaved}
-                            value={slip.category}
-                            onChange={(e) => setSlips(prev => prev.map(s => s.id === slip.id ? { ...s, category: e.target.value } : s))}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-lg px-1 py-1 text-[11px] text-slate-700 mt-0.5 focus:outline-none focus:border-indigo-400"
-                          >
-                            {getExpenseCategories().map(cat => (
-                              <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                          </select>
+                      {/* Category/account or transfer account row */}
+                      {slip.entryType === 'transfer' ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-bold block">บัญชีต้นทาง</label>
+                            <select
+                              disabled={slip.isSaved}
+                              value={slip.fromAccountId}
+                              onChange={(e) => setSlips(prev => prev.map(s => s.id === slip.id ? { ...s, fromAccountId: e.target.value } : s))}
+                              className="w-full bg-slate-50 border border-slate-100 rounded-lg px-1 py-1 text-[11px] text-slate-700 mt-0.5 focus:outline-none focus:border-indigo-400"
+                            >
+                              <option value="">เลือกบัญชีต้นทาง</option>
+                              {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.name} ({acc.type === 'savings' ? 'บัญชี/เงินสด' : 'บัตรเครดิต'})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-bold block">บัญชีปลายทาง</label>
+                            <select
+                              disabled={slip.isSaved}
+                              value={slip.toAccountId}
+                              onChange={(e) => setSlips(prev => prev.map(s => s.id === slip.id ? { ...s, toAccountId: e.target.value } : s))}
+                              className="w-full bg-slate-50 border border-slate-100 rounded-lg px-1 py-1 text-[11px] text-slate-700 mt-0.5 focus:outline-none focus:border-indigo-400"
+                            >
+                              <option value="">เลือกบัญชีปลายทาง</option>
+                              {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.name} ({acc.type === 'savings' ? 'บัญชี/เงินสด' : 'บัตรเครดิต'})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-bold block">แหล่งเงินที่จ่าย</label>
-                          <select
-                            disabled={slip.isSaved}
-                            value={slip.accountId}
-                            onChange={(e) => setSlips(prev => prev.map(s => s.id === slip.id ? { ...s, accountId: e.target.value } : s))}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-lg px-1 py-1 text-[11px] text-slate-700 mt-0.5 focus:outline-none focus:border-indigo-400"
-                          >
-                            {accounts.map(acc => (
-                              <option key={acc.id} value={acc.id}>
-                                {acc.name} ({acc.type === 'savings' ? 'ออมทรัพย์' : 'บัตรเครดิต'})
-                              </option>
-                            ))}
-                          </select>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-bold block">หมวดหมู่รายจ่าย</label>
+                            <select
+                              disabled={slip.isSaved}
+                              value={slip.category}
+                              onChange={(e) => setSlips(prev => prev.map(s => s.id === slip.id ? { ...s, category: e.target.value } : s))}
+                              className="w-full bg-slate-50 border border-slate-100 rounded-lg px-1 py-1 text-[11px] text-slate-700 mt-0.5 focus:outline-none focus:border-indigo-400"
+                            >
+                              {getExpenseCategories().map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-bold block">แหล่งเงินที่จ่าย</label>
+                            <select
+                              disabled={slip.isSaved}
+                              value={slip.accountId}
+                              onChange={(e) => setSlips(prev => prev.map(s => s.id === slip.id ? { ...s, accountId: e.target.value } : s))}
+                              className="w-full bg-slate-50 border border-slate-100 rounded-lg px-1 py-1 text-[11px] text-slate-700 mt-0.5 focus:outline-none focus:border-indigo-400"
+                            >
+                              {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.name} ({acc.type === 'savings' ? 'บัญชี/เงินสด' : 'บัตรเครดิต'})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Inline individual Save button */}
                       <div className="flex justify-end pt-1">

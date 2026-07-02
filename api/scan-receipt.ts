@@ -33,11 +33,14 @@ export default async function handler(req: any, res: any) {
           role: 'user',
           parts: [
             {
-              text: `Analyze this receipt image and extract details. Return a JSON object with the following fields:
+              text: `Analyze this receipt or bank transfer slip image and extract details. Return a JSON object with the following fields:
 - totalAmount: The total cost of the transaction (number)
 - date: The transaction date in YYYY-MM-DD format (string, if not found use current date)
-- storeName: The name of the store or merchant (string)
+- storeName: The name of the store, merchant, bank, or transfer service (string)
 - description: A short list of main items or description (string)
+- isTransferBetweenOwnAccounts: true only when this is a money transfer slip and the sender name and receiver name appear to be the same person or the same owner. If sender/receiver names are different, return false.
+- transferSenderName: Sender / payer name from a transfer slip, or empty string.
+- transferReceiverName: Receiver / payee name from a transfer slip, or empty string.
 - suggestedCategory: The expense category. Choose EXACTLY one of these categories:
   "อาหารและเครื่องดื่ม (Food & Drinks)"
   "ช้อปปิ้ง (Shopping)"
@@ -67,9 +70,12 @@ export default async function handler(req: any, res: any) {
             date: { type: 'STRING' },
             storeName: { type: 'STRING' },
             description: { type: 'STRING' },
+            isTransferBetweenOwnAccounts: { type: 'BOOLEAN' },
+            transferSenderName: { type: 'STRING' },
+            transferReceiverName: { type: 'STRING' },
             suggestedCategory: { type: 'STRING' },
           },
-          required: ['totalAmount', 'date', 'storeName', 'suggestedCategory'],
+          required: ['totalAmount', 'date', 'storeName', 'isTransferBetweenOwnAccounts', 'suggestedCategory'],
         },
       },
     });
